@@ -1140,7 +1140,9 @@ function updateSummary(){
 // ==============================
 // SEARCH MODAL
 // ==============================
-let curMealId=null,selFood=null;
+let curMealId=null;
+let pickedFood=null; // renamed from selFood to avoid clash with function name
+
 function openSearch(mealId){
   curMealId=mealId;
   const m=MEALS_CFG.find(x=>x.id===mealId);
@@ -1150,29 +1152,46 @@ function openSearch(mealId){
   document.getElementById('search-modal').classList.add('op');
   setTimeout(()=>document.getElementById('food-search').focus(),350);
 }
-function closeSearch(){document.getElementById('search-modal').classList.remove('op')}
+function closeSearch(){document.getElementById('search-modal').classList.remove('op');}
 
 let stimer;
 function searchFood(q){
   clearTimeout(stimer);
   stimer=setTimeout(()=>{
     const qL=q.toLowerCase().trim();
-    if(!qL){document.getElementById('search-results').innerHTML='<div style="padding:28px;text-align:center;color:var(--t2);font-size:13px">Wpisz nazwę</div>';return;}
+    if(!qL){
+      document.getElementById('search-results').innerHTML='<div style="padding:28px;text-align:center;color:var(--t2);font-size:13px">Wpisz nazwę</div>';
+      return;
+    }
     const res=FOOD_DB.filter(f=>f.name.toLowerCase().includes(qL)).slice(0,40);
-    if(!res.length){document.getElementById('search-results').innerHTML='<div style="padding:28px;text-align:center;color:var(--t2);font-size:13px">Nie znaleziono</div>';return;}
-    document.getElementById('search-results').innerHTML=res.map(f=>`
-      <div class="sri" onclick="selFood(${f.id})">
+    if(!res.length){
+      document.getElementById('search-results').innerHTML='<div style="padding:28px;text-align:center;color:var(--t2);font-size:13px">Nie znaleziono</div>';
+      return;
+    }
+    // Build result items using data-id attribute instead of inline JSON
+    const html=res.map(f=>`
+      <div class="sri" data-fid="${f.id}" onclick="pickFood(this.dataset.fid)">
         <div class="sri-ico">${f.emoji}</div>
-        <div style="flex:1"><div class="sri-n">${f.name}</div><div class="sri-m"><span style="color:var(--b)">B:${f.p100}g</span> · <span style="color:var(--o)">T:${f.f100}g</span> · <span style="color:var(--g)">W:${f.c100}g</span> / 100${f.unit}</div></div>
+        <div style="flex:1">
+          <div class="sri-n">${f.name}</div>
+          <div class="sri-m">
+            <span style="color:var(--b)">B:${f.p100}g</span> ·
+            <span style="color:var(--o)">T:${f.f100}g</span> ·
+            <span style="color:var(--g)">W:${f.c100}g</span>
+            <span style="color:var(--t3)"> / 100${f.unit}</span>
+          </div>
+        </div>
         <div class="sri-k">${f.kcal100}</div>
       </div>`).join('');
+    document.getElementById('search-results').innerHTML=html;
   },200);
 }
 
-function selFood(fid){
-  selFood=FOOD_DB.find(f=>f.id===fid);
+function pickFood(fid){
+  pickedFood=FOOD_DB.find(f=>f.id===parseInt(fid));
+  if(!pickedFood)return;
   closeSearch();
-  document.getElementById('amt-name').textContent=selFood.name;
+  document.getElementById('amt-name').textContent=pickedFood.name;
   document.getElementById('amt-inp').value=100;
   updateAmtPreview();
   document.getElementById('amount-modal').classList.add('op');
@@ -1180,9 +1199,13 @@ function selFood(fid){
 }
 
 function updateAmtPreview(){
-  if(!selFood)return;
-  const g=parseFloat(document.getElementById('amt-inp').value)||100,m=g/100;
-  const k=Math.round(selFood.kcal100*m),p=+(selFood.p100*m).toFixed(1),f=+(selFood.f100*m).toFixed(1),c=+(selFood.c100*m).toFixed(1);
+  if(!pickedFood)return;
+  const g=parseFloat(document.getElementById('amt-inp').value)||100;
+  const m=g/100;
+  const k=Math.round(pickedFood.kcal100*m);
+  const p=+(pickedFood.p100*m).toFixed(1);
+  const f=+(pickedFood.f100*m).toFixed(1);
+  const c=+(pickedFood.c100*m).toFixed(1);
   document.getElementById('amt-prev').innerHTML=`
     <div class="amtm"><div class="amtm-l">Kalorie</div><div class="amtm-v" style="color:var(--g)">${k}</div></div>
     <div class="amtm"><div class="amtm-l">Białko</div><div class="amtm-v" style="color:var(--b)">${p}g</div></div>
@@ -1190,16 +1213,29 @@ function updateAmtPreview(){
     <div class="amtm"><div class="amtm-l">Węgle</div><div class="amtm-v" style="color:var(--g)">${c}g</div></div>`;
 }
 
-function closeAmount(){document.getElementById('amount-modal').classList.remove('op');selFood=null;}
+function closeAmount(){
+  document.getElementById('amount-modal').classList.remove('op');
+  pickedFood=null;
+}
 
 function confirmAdd(){
-  if(!selFood||!curMealId)return;
-  const g=parseFloat(document.getElementById('amt-inp').value)||100,m=g/100;
-  const dish={name:selFood.name+(g!==100?` (${g}${selFood.unit})`:''),emoji:selFood.emoji,
-    kcal:Math.round(selFood.kcal100*m),p:+(selFood.p100*m).toFixed(1),
-    f:+(selFood.f100*m).toFixed(1),c:+(selFood.c100*m).toFixed(1)};
-  S.mealData[curMealId].push(dish);saveS();renderDL(curMealId);updateSummary();
-  closeAmount();showNotif(`${selFood.emoji} Dodano ${dish.name} (${dish.kcal} kcal)`);
+  if(!pickedFood||!curMealId)return;
+  const g=parseFloat(document.getElementById('amt-inp').value)||100;
+  const m=g/100;
+  const dish={
+    name:pickedFood.name+(g!==100?` (${g}${pickedFood.unit})`:''),
+    emoji:pickedFood.emoji,
+    kcal:Math.round(pickedFood.kcal100*m),
+    p:+(pickedFood.p100*m).toFixed(1),
+    f:+(pickedFood.f100*m).toFixed(1),
+    c:+(pickedFood.c100*m).toFixed(1)
+  };
+  S.mealData[curMealId].push(dish);
+  saveS();
+  renderDL(curMealId);
+  updateSummary();
+  closeAmount();
+  showNotif(pickedFood.emoji+' Dodano '+dish.name+' ('+dish.kcal+' kcal)');
 }
 
 // ==============================
@@ -1249,17 +1285,26 @@ Dla każdego produktu podaj realistyczne wartości dla podanej ilości gramów (
       document.getElementById('scan-loading').classList.remove('show');
       
       const items=parsed.items||[];
+      // Store globally so onclick buttons can reference without inline JSON
+      window._lastScanItems=items;
+      
       let html=items.map(it=>`
         <div class="di">
-          <span style="font-size:17px">${it.emoji}</span>
-          <div style="flex:1"><div class="dn">${it.name} (~${it.grams||100}g)</div>
-          <div class="dm"><span style="color:var(--b)">B:${it.p}g</span><span style="color:var(--o)">T:${it.f}g</span><span style="color:var(--g)">W:${it.c}g</span></div></div>
+          <span style="font-size:17px">${it.emoji||'🍽️'}</span>
+          <div style="flex:1">
+            <div class="dn">${it.name} (~${it.grams||100}g)</div>
+            <div class="dm">
+              <span style="color:var(--b)">B:${it.p}g</span>
+              <span style="color:var(--o)">T:${it.f}g</span>
+              <span style="color:var(--g)">W:${it.c}g</span>
+            </div>
+          </div>
           <div class="dk">${it.kcal}kcal</div>
         </div>`).join('');
       document.getElementById('scan-items').innerHTML=html;
       
-      // Add to meal buttons
-      let mealBtns=MEALS_CFG.map(m=>`<button class="mpi-btn" onclick="addScannedToMeal('${m.id}',${JSON.stringify(items).replace(/'/g,"&#39;")})">${m.icon} ${m.name}</button>`).join('');
+      // Use data-mid attribute instead of inline JSON
+      let mealBtns=MEALS_CFG.map(m=>`<button class="mpi-btn" data-mid="${m.id}" onclick="addScannedToMeal(this.dataset.mid)">${m.icon} ${m.name}</button>`).join('');
       document.getElementById('scan-meal-btns').innerHTML=mealBtns;
       document.getElementById('scan-result').classList.add('show');
     }catch(err){
@@ -1273,16 +1318,26 @@ Dla każdego produktu podaj realistyczne wartości dla podanej ilości gramów (
   reader.readAsDataURL(file);
 }
 
-function addScannedToMeal(mealId,items){
+function addScannedToMeal(mealId){
+  const items=window._lastScanItems||[];
+  if(!items.length){showNotif('⚠️ Brak produktów do dodania');return;}
   items.forEach(it=>{
-    S.mealData[mealId].push({name:it.name+' (skan)',emoji:it.emoji,kcal:it.kcal,p:it.p,f:it.f,c:it.c});
+    S.mealData[mealId].push({
+      name:it.name+' (skan)',
+      emoji:it.emoji||'🍽️',
+      kcal:Number(it.kcal)||0,
+      p:Number(it.p)||0,
+      f:Number(it.f)||0,
+      c:Number(it.c)||0
+    });
   });
   saveS();renderDL(mealId);updateSummary();
-  showNotif(`✅ Dodano ${items.length} produktów do posiłku!`);
-  // Reset scan
+  showNotif('✅ Dodano '+items.length+' produktów do posiłku!');
+  // Reset scan UI
   document.getElementById('scan-drop-area').style.display='block';
   document.getElementById('scan-preview-wrap').style.display='none';
   document.getElementById('scan-result').classList.remove('show');
+  window._lastScanItems=null;
   switchTab('dzisiaj',document.getElementById('tabBtn-dzisiaj'));
 }
 
@@ -1362,7 +1417,7 @@ function renderWList(){
 // ==============================
 function buildRecipes(){
   const c=document.getElementById('recipes-container');
-  c.innerHTML=RESPO_RECIPES.map(r=>`
+  c.innerHTML=RESPO_RECIPES.map((r,ri)=>`
     <div class="recipe-card">
       <div style="background:linear-gradient(135deg,var(--card2),var(--card));padding:16px;display:flex;align-items:center;gap:12px">
         <span style="font-size:42px">${r.emoji}</span>
@@ -1390,22 +1445,51 @@ function buildRecipes(){
           <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:6px">Przygotowanie:</div>
           ${r.steps.map((s,i)=>`<div style="font-size:13px;padding:3px 0"><span style="color:var(--b);font-weight:600">${i+1}.</span> ${s}</div>`).join('')}
         </div>
-        <button class="btn-recipe-add" onclick="addRecipeToMeal('${r.name}')">+ Dodaj do posiłku</button>
+        <button class="btn-recipe-add" data-ridx="${ri}" onclick="addRecipeByIndex(parseInt(this.dataset.ridx))">+ Dodaj do posiłku</button>
         <a href="${r.url}" target="_blank" style="display:block;text-align:center;color:var(--b);font-size:12px;margin-top:8px;text-decoration:none">→ Pełny przepis na Respo ↗</a>
       </div>
     </div>`).join('');
 }
 
+// Show meal picker modal for recipe
+let pendingRecipeIdx=null;
+function addRecipeByIndex(idx){
+  pendingRecipeIdx=idx;
+  const r=RESPO_RECIPES[idx];
+  if(!r)return;
+  // Build a small inline picker
+  const existing=document.getElementById('recipe-meal-picker');
+  if(existing)existing.remove();
+  const div=document.createElement('div');
+  div.id='recipe-meal-picker';
+  div.style.cssText='position:fixed;inset:0;z-index:3000;background:rgba(0,0,0,.7);backdrop-filter:blur(15px);display:flex;align-items:flex-end';
+  div.innerHTML=`<div style="width:100%;max-width:600px;margin:0 auto;background:var(--surface);border-radius:24px 24px 0 0;border:1px solid var(--border);padding:16px 16px 30px">
+    <div style="width:32px;height:4px;border-radius:99px;background:var(--border2);margin:0 auto 14px"></div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:14px">${r.emoji} Do którego posiłku?</div>
+    ${MEALS_CFG.map(m=>`<button onclick="confirmRecipeAdd(${idx},'${m.id}')" style="display:block;width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;color:var(--w);font-family:inherit;font-size:15px;font-weight:500;padding:13px 16px;margin-bottom:8px;cursor:pointer;text-align:left">${m.icon} ${m.name} <span style="color:var(--t2);font-size:12px">${m.time}</span></button>`).join('')}
+    <button onclick="document.getElementById('recipe-meal-picker').remove()" style="display:block;width:100%;background:none;border:none;color:var(--t2);font-family:inherit;font-size:15px;padding:10px;cursor:pointer;margin-top:4px">Anuluj</button>
+  </div>`;
+  div.onclick=function(e){if(e.target===div)div.remove();};
+  document.body.appendChild(div);
+}
+
 function addRecipeToMeal(recipeName){
-  const r=RESPO_RECIPES.find(x=>x.name===recipeName);if(!r)return;
-  // Ask which meal
-  const opts=MEALS_CFG.map((m,i)=>`${i+1}. ${m.name}`).join('\n');
-  const idx=parseInt(prompt(`Do którego posiłku dodać "${r.name}"?\n${opts}`)||'0')-1;
-  if(idx<0||idx>=MEALS_CFG.length)return;
-  const mid=MEALS_CFG[idx].id;
-  S.mealData[mid].push({name:r.name+' (Respo)',emoji:r.emoji,kcal:r.kcal,p:r.p,f:r.f,c:r.c});
-  saveS();renderDL(mid);updateSummary();
-  showNotif(`${r.emoji} Dodano "${r.name}" do ${MEALS_CFG[idx].name}!`);
+  const idx=RESPO_RECIPES.findIndex(x=>x.name===recipeName);
+  if(idx>=0)addRecipeByIndex(idx);
+}
+
+function confirmRecipeAdd(recipeIdx, mealId){
+  const r=RESPO_RECIPES[recipeIdx];
+  if(!r)return;
+  document.getElementById('recipe-meal-picker')?.remove();
+  const m=MEALS_CFG.find(x=>x.id===mealId);
+  S.mealData[mealId].push({
+    name:r.name+' (Respo)',
+    emoji:r.emoji,
+    kcal:r.kcal,p:r.p,f:r.f,c:r.c
+  });
+  saveS();renderDL(mealId);updateSummary();
+  showNotif(r.emoji+' Dodano "'+r.name+'" do '+m.name+'!');
 }
 
 function buildWeekPlan(){
@@ -1428,13 +1512,17 @@ function buildWeekPlan(){
         </div>
       </div>
       <div class="day-body ${isToday?'op':''}">
-        ${d.meals.map(m=>`
-          <div class="meal-plan-item">
+        ${d.meals.map(m=>{
+          // Find recipe index safely
+          const rIdx=m.recipe?RESPO_RECIPES.findIndex(r=>r.name===m.recipe):-1;
+          const btn=rIdx>=0?`<button class="mpi-btn" data-ridx="${rIdx}" onclick="addRecipeByIndex(parseInt(this.dataset.ridx))">+ Dodaj do posiłków</button>`:'';
+          return`<div class="meal-plan-item">
             <div class="mpi-time">${m.t}</div>
             <div class="mpi-name">${m.name}</div>
             <div class="mpi-macros"><span style="color:var(--g)">${m.kcal}kcal</span> · <span style="color:var(--b)">B:${m.p}g</span> · <span style="color:var(--o)">T:${m.f}g</span> · <span style="color:var(--g)">W:${m.c}g</span></div>
-            ${m.recipe?`<button class="mpi-btn" onclick="addRecipeToMeal('${m.recipe}')">+ Dodaj do dzisiejszych posiłków</button>`:''}
-          </div>`).join('')}
+            ${btn}
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
   }).join('');
